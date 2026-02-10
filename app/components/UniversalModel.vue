@@ -69,7 +69,7 @@
 		}>(),
 		{
 			maxWidth: '60vw',
-			minHeight: '50vh'
+			minHeight: 'auto'
 		}
 	);
 

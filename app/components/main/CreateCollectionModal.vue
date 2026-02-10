@@ -1,36 +1,35 @@
 <template>
-    <div>
-      <v-dialog v-if="!isMobile" v-model="isOpen" :max-width="maxWidth">
-        <v-card>
-          <slot></slot>
-        </v-card>
-      </v-dialog>
-  
-      <v-bottom-sheet v-else v-model="isOpen" :minHeight="'80%'">
-        <v-sheet class="pa-4">
-          <slot></slot>
-        </v-sheet>
-      </v-bottom-sheet>
-    </div>
-  </template>
-  
-  <script setup lang="ts">
-  import { computed } from 'vue'
-  import { useDisplay } from 'vuetify'
-  
-  const props = defineProps({
-    modelValue: { type: Boolean, required: true },
-    maxWidth: { type: [String, Number], default: 500 }
-  })
-  
-  const emit = defineEmits(['update:modelValue'])
-  
-  const isOpen = computed({
-    get: () => props.modelValue,
-    set: (val: boolean) => emit('update:modelValue', val)
-  })
-  
-  const { smAndDown } = useDisplay()
-  const isMobile = computed(() => smAndDown.value)
-  </script>
-  
+	<UniversalModel v-model:isOpen="isOpen">
+		<template #top>
+			<span>{{ $t('main.createCollection') }}</span>
+		</template>
+
+		<template #default>
+			<span>
+				Здесь основной контент модалки. Можно вставлять любые элементы, формы и текст.
+			</span>
+		</template>
+
+		<template #bottom>
+			<div class="flex gap-2 w-full">
+				<v-btn
+					class="flex-1"
+					text
+					@click="isOpen = false"
+					>Отмена</v-btn
+				>
+				<v-btn
+					class="flex-1"
+					color="primary"
+					>Сохранить</v-btn
+				>
+			</div>
+		</template>
+	</UniversalModel>
+</template>
+
+<script setup lang="ts">
+	import UniversalModel from '../UniversalModel.vue';
+
+	const isOpen = defineModel<boolean>('isOpen');
+</script>
