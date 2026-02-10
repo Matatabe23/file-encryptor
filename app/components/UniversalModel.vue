@@ -6,9 +6,21 @@
 			:max-width="maxWidth"
 		>
 			<v-card>
-				<slot name="top"></slot>
-				<slot></slot>
-				<slot name="bottom"></slot>
+				<template v-if="$slots.top">
+					<v-card-title>
+						<slot name="top"></slot>
+					</v-card-title>
+				</template>
+
+				<v-card-text>
+					<slot></slot>
+				</v-card-text>
+
+				<template v-if="$slots.bottom">
+					<v-card-actions>
+						<slot name="bottom"></slot>
+					</v-card-actions>
+				</template>
 			</v-card>
 		</v-dialog>
 
@@ -16,13 +28,29 @@
 			v-else
 			v-model="isOpen"
 		>
-			<v-sheet
-				class="pa-4"
-				:style="{ minHeight: minHeight }"
-			>
-				<slot name="top"></slot>
-				<slot></slot>
-				<slot name="bottom"></slot>
+			<v-sheet class="flex flex-col h-full pa-4">
+				<div
+					class="flex flex-col h-full"
+					:style="{ minHeight: minHeight }"
+				>
+					<template v-if="$slots.top">
+						<v-card-title>
+							<slot name="top"></slot>
+						</v-card-title>
+					</template>
+
+					<div class="h-full flex-1 overflow-auto">
+						<v-card-text>
+							<slot></slot>
+						</v-card-text>
+					</div>
+
+					<template v-if="$slots.bottom">
+						<v-card-actions>
+							<slot name="bottom"></slot>
+						</v-card-actions>
+					</template>
+				</div>
 			</v-sheet>
 		</v-bottom-sheet>
 	</div>
@@ -34,11 +62,10 @@
 
 	const { smAndDown } = useDisplay();
 
-
 	const props = withDefaults(
 		defineProps<{
-			maxWidth: string
-			minHeight: string;
+			maxWidth?: string;
+			minHeight?: string;
 		}>(),
 		{
 			maxWidth: '60vw',
@@ -47,6 +74,5 @@
 	);
 
 	const isOpen = defineModel<boolean>('isOpen');
-
 	const isMobile = computed(() => smAndDown.value);
 </script>
