@@ -2,6 +2,9 @@ export default defineNuxtConfig({
     ssr: false,
     compatibilityDate: '2025-07-15',
     devtools: { enabled: true },
+    nitro: {
+        preset: "static",
+    },
     runtimeConfig: {
         public: {
             API_BASE_URL: process.env.NUXT_PUBLIC_API_BASE_URL

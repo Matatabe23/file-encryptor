@@ -1,39 +1,39 @@
 {
-  "name": "file-encryptor",
-  "type": "module",
-  "private": true,
-  "scripts": {
-    "build": "nuxt build",
-    "dev": "nuxt dev",
-    "generate": "nuxt build",
-    "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build",
-    "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
-  },
-  "dependencies": {
-    "nuxt": "^4.3.1",
-    "vue": "^3.5.27",
-    "vue-router": "^4.6.4",
-    "@mdi/font": "^7.4.47",
-    "@nuxtjs/i18n": "^10.2.1",
-    "@pinia/nuxt": "^0.11.3",
-    "@vee-validate/i18n": "^4.15.1",
-    "@vee-validate/rules": "^4.15.1",
-    "flag-icon-css": "^4.1.7",
-    "pinia": "^3.0.4",
-    "sass": "^1.97.2",
-    "vee-validate": "^4.15.1",
-
-    "vue-toastification": "^2.0.0-rc.5",
-    "vuetify": "^3.11.6",
-    "vuetify-nuxt-module": "^0.19.2"
-  },
-  "devDependencies": {
-    "@tauri-apps/api": "^2.10.1",
-    "@tauri-apps/cli": "^2.10.0",
-    "@nuxtjs/tailwindcss": "^6.14.0",
-    "nuxt-lodash": "^2.5.3",
-    "vite-plugin-vuetify": "^2.1.2"
-  }
+	"name": "file-encryptor",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"build": "nuxt build",
+		"dev": "nuxt dev",
+		"generate": "nuxt build",
+		"tauri:dev": "tauri dev",
+		"tauri:build": "tauri build",
+		"tauri:generate-icons": "tauri icon src-tauri/icons/icon.png",
+		"preview": "nuxt preview",
+		"postinstall": "nuxt prepare"
+	},
+	"dependencies": {
+		"nuxt": "^4.3.1",
+		"vue": "^3.5.27",
+		"vue-router": "^4.6.4",
+		"@mdi/font": "^7.4.47",
+		"@nuxtjs/i18n": "^10.2.1",
+		"@pinia/nuxt": "^0.11.3",
+		"@vee-validate/i18n": "^4.15.1",
+		"@vee-validate/rules": "^4.15.1",
+		"flag-icon-css": "^4.1.7",
+		"pinia": "^3.0.4",
+		"sass": "^1.97.2",
+		"vee-validate": "^4.15.1",
+		"vue-toastification": "^2.0.0-rc.5",
+		"vuetify": "^3.11.6",
+		"vuetify-nuxt-module": "^0.19.2"
+	},
+	"devDependencies": {
+		"@tauri-apps/api": "^2.10.1",
+		"@tauri-apps/cli": "^2.10.0",
+		"@nuxtjs/tailwindcss": "^6.14.0",
+		"nuxt-lodash": "^2.5.3",
+		"vite-plugin-vuetify": "^2.1.2"
+	}
 }
