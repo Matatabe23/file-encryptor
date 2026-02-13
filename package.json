@@ -6,6 +6,7 @@
 		"build": "nuxt build",
 		"dev": "nuxt dev",
 		"generate": "nuxt build",
+		"tauri": "tauri",
 		"tauri:dev": "tauri dev",
 		"tauri:build": "tauri build",
 		"tauri:generate-icons": "tauri icon src-tauri/icons/icon.png",
