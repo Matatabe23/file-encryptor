@@ -9,5 +9,5 @@
 <script setup lang="ts">
 	import CreateCollectionModal from '~/components/main/CreateCollectionModal.vue';
 
-	const isCreateCollectionModal = ref(true);
+	const isCreateCollectionModal = ref(false);
 </script>

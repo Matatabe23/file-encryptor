@@ -10,6 +10,10 @@
 		"tauri:dev": "tauri dev",
 		"tauri:build": "tauri build",
 		"tauri:generate-icons": "tauri icon src-tauri/icons/icon.png",
+		"android": "tauri icon src-tauri/icons/icon.png && node scripts/copy-android-icons.js && tauri android build --debug",
+		"android:release": "tauri icon src-tauri/icons/icon.png && node scripts/copy-android-icons.js && tauri android build",
+		"tauri:android": "tauri android build --debug",
+		"tauri:android:release": "tauri android build",
 		"preview": "nuxt preview",
 		"postinstall": "nuxt prepare"
 	},
