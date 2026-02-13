@@ -28,7 +28,10 @@
 			v-else
 			v-model="isOpen"
 		>
-			<v-sheet class="flex flex-col h-full pa-4">
+			<v-sheet
+				class="flex flex-col h-full pa-4"
+				:class="{ 'bottom-sheet-safe': isMobileDevice }"
+			>
 				<div
 					class="flex flex-col h-full"
 					:style="{ minHeight: minHeight }"
@@ -57,7 +60,7 @@
 </template>
 
 <script setup lang="ts">
-	import { computed } from 'vue';
+	import { computed, ref, onMounted } from 'vue';
 	import { useDisplay } from 'vuetify';
 
 	const { smAndDown } = useDisplay();
@@ -75,4 +78,30 @@
 
 	const isOpen = defineModel<boolean>('isOpen');
 	const isMobile = computed(() => smAndDown.value);
+
+	// Та же логика, что в верхнем меню (default.vue): Tauri plugin-os или userAgent
+	const isMobileDevice = ref(false);
+	const platform = ref<string | null>(null);
+
+	onMounted(async () => {
+		try {
+			const { type } = await import('@tauri-apps/plugin-os');
+			const osType = type();
+			platform.value = osType;
+			isMobileDevice.value = osType === 'android' || osType === 'ios';
+		} catch {
+			const ua = navigator.userAgent || '';
+			const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+			isMobileDevice.value = mobile;
+			platform.value = mobile ? (ua.includes('Android') ? 'android' : 'ios') : null;
+		}
+	});
 </script>
+
+<style scoped>
+/* Нижний safe area только на мобильном устройстве: как в верхнем меню, подстраивается под iOS/Android. */
+.bottom-sheet-safe {
+	--safe-bottom: max(env(safe-area-inset-bottom, 0px), 32px);
+	padding-bottom: var(--safe-bottom) !important;
+}
+</style>
