@@ -18,23 +18,15 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { getDeviceInfo } from '~/helpers/tauri'
 
 const isMobile = ref(false)
 const platform = ref(null) // 'android' | 'ios' | 'windows' | 'macos' | 'linux' | null (браузер)
 
 onMounted(async () => {
-	try {
-		const { type } = await import('@tauri-apps/plugin-os')
-		const osType = type()
-		platform.value = osType
-		isMobile.value = osType === 'android' || osType === 'ios'
-	} catch {
-		// Не Tauri (браузер) — определяем по userAgent для отступа в мобильном браузере
-		const ua = navigator.userAgent || ''
-		const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)
-		isMobile.value = mobile
-		platform.value = mobile ? (ua.includes('Android') ? 'android' : 'ios') : null
-	}
+	const { platform: p, isMobile: m } = await getDeviceInfo()
+	platform.value = p
+	isMobile.value = m
 })
 </script>
 

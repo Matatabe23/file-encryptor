@@ -62,6 +62,7 @@
 <script setup lang="ts">
 	import { computed, ref, onMounted } from 'vue';
 	import { useDisplay } from 'vuetify';
+	import { getDeviceInfo } from '~/helpers/tauri';
 
 	const { smAndDown } = useDisplay();
 
@@ -79,22 +80,13 @@
 	const isOpen = defineModel<boolean>('isOpen');
 	const isMobile = computed(() => smAndDown.value);
 
-	// Та же логика, что в верхнем меню (default.vue): Tauri plugin-os или userAgent
 	const isMobileDevice = ref(false);
 	const platform = ref<string | null>(null);
 
 	onMounted(async () => {
-		try {
-			const { type } = await import('@tauri-apps/plugin-os');
-			const osType = type();
-			platform.value = osType;
-			isMobileDevice.value = osType === 'android' || osType === 'ios';
-		} catch {
-			const ua = navigator.userAgent || '';
-			const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-			isMobileDevice.value = mobile;
-			platform.value = mobile ? (ua.includes('Android') ? 'android' : 'ios') : null;
-		}
+		const { platform: p, isMobile: m } = await getDeviceInfo();
+		platform.value = p;
+		isMobileDevice.value = m;
 	});
 </script>
 
