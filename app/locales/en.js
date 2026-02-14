@@ -5,6 +5,9 @@ export default {
 	main: {
 		createCollection: 'Create collection'
 	},
+	storage: {
+		title: 'Cloud storage'
+	},
 	common: {
 		cancel: 'Cancel',
 		save: 'Save'

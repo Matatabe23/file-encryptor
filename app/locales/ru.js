@@ -8,6 +8,9 @@ export default {
 	main: {
 		createCollection: 'Создать коллекцию'
 	},
+	storage: {
+		title: 'Облачное хранилище'
+	},
 	common: {
 		cancel: 'Отмена',
 		save: 'Сохранить'
