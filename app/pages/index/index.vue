@@ -12,7 +12,9 @@
 <script setup lang="ts">
 	import CreateCollectionModal from '~/components/main/CreateCollectionModal.vue';
 	import { pickAndSaveFile as saveFile } from '~/helpers/tauri';
+	import { useToast } from 'vue-toastification';
 
+	const toast = useToast();
 	const isCreateCollectionModal = ref(false);
 	const savingFile = ref(false);
 
@@ -21,9 +23,13 @@
 		try {
 			savingFile.value = true;
 			const savedPath = await saveFile();
-			if (savedPath) console.log('Файл сохранён:', savedPath);
+			if (savedPath) {
+				toast.success(`Файл сохранён:`,);
+			}
 		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
 			console.error(e);
+			toast.error(`Ошибка сохранения: ${msg}`);
 		} finally {
 			savingFile.value = false;
 		}
