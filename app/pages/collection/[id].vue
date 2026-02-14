@@ -102,13 +102,19 @@
 					<v-card>
 						<v-card-title>{{ $t('collections.deleteCollection') }}</v-card-title>
 						<v-card-text>
-							{{ $t('collections.deleteCollectionConfirm', { name: collection.name }) }}
+							<p class="mb-3">{{ $t('collections.deleteCollectionConfirm', { name: collection.name }) }}</p>
+							<v-checkbox
+								v-model="deleteCollectionFiles"
+								:label="$t('collections.deleteCollectionFiles')"
+								hide-details
+								density="compact"
+							/>
 						</v-card-text>
 						<v-card-actions>
 							<v-btn variant="text" @click="confirmDeleteCollectionDialog = false">
 								{{ $t('common.cancel') }}
 							</v-btn>
-							<v-btn color="error" variant="text" @click="doDeleteCollection">
+							<v-btn color="error" variant="text" :loading="deletingCollection" @click="doDeleteCollection">
 								{{ $t('collections.delete') }}
 							</v-btn>
 						</v-card-actions>
@@ -170,6 +176,8 @@
 	const confirmDeleteDialog = ref(false);
 	const fileToDelete = ref<CollectionFile | null>(null);
 	const confirmDeleteCollectionDialog = ref(false);
+	const deleteCollectionFiles = ref(false);
+	const deletingCollection = ref(false);
 
 	async function unlock() {
 		if (!collection.value?.passwordHash) return;
@@ -288,11 +296,7 @@
 			zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
 			for (const f of files.value) {
-				let bytes = await readAppFile(f.path);
-				if (f.encrypted && collection.value?.type === 'encrypted') {
-					const pwd = sessionPassword.value;
-					if (pwd) bytes = await decryptWithPassword(pwd, bytes);
-				}
+				const bytes = await readAppFile(f.path);
 				zip.file(f.name, bytes);
 			}
 
@@ -336,15 +340,29 @@
 	}
 
 	function confirmDeleteCollectionPage() {
+		deleteCollectionFiles.value = false;
 		confirmDeleteCollectionDialog.value = true;
 	}
 
-	function doDeleteCollection() {
-		if (collection.value) {
-			collectionsStore.removeCollection(collection.value.id);
+	async function doDeleteCollection() {
+		const c = collection.value;
+		if (!c) return;
+		deletingCollection.value = true;
+		try {
+			if (deleteCollectionFiles.value) {
+				const filesToDelete = collectionsStore.getFilesForCollection(c.id);
+				for (const f of filesToDelete) {
+					try {
+						await deleteAppFile(f.path);
+					} catch (_) {}
+				}
+			}
+			collectionsStore.removeCollection(c.id);
 			confirmDeleteCollectionDialog.value = false;
 			toast.success('Коллекция удалена');
 			router.push('/');
+		} finally {
+			deletingCollection.value = false;
 		}
 	}
 

@@ -50,13 +50,19 @@
 			<v-card>
 				<v-card-title>{{ $t('collections.deleteCollection') }}</v-card-title>
 				<v-card-text>
-					{{ collectionToDelete ? $t('collections.deleteCollectionConfirm', { name: collectionToDelete.name }) : '' }}
+					<p class="mb-3">{{ collectionToDelete ? $t('collections.deleteCollectionConfirm', { name: collectionToDelete.name }) : '' }}</p>
+					<v-checkbox
+						v-model="deleteCollectionFiles"
+						:label="$t('collections.deleteCollectionFiles')"
+						hide-details
+						density="compact"
+					/>
 				</v-card-text>
 				<v-card-actions>
 					<v-btn variant="text" @click="confirmDeleteCollectionDialog = false">
 						{{ $t('common.cancel') }}
 					</v-btn>
-					<v-btn color="error" variant="text" @click="doDeleteCollection">
+					<v-btn color="error" variant="text" :loading="deletingCollection" @click="doDeleteCollection">
 						{{ $t('collections.delete') }}
 					</v-btn>
 				</v-card-actions>
@@ -92,8 +98,8 @@
 <script setup lang="ts">
 	import CreateCollectionModal from '~/components/main/CreateCollectionModal.vue';
 	import { useCollectionsStore } from '~/stores/collections';
-	import { saveFileToCollection } from '~/helpers/tauri/file';
-	import { encryptWithPassword, hashPassword } from '~/helpers/crypto';
+	import { saveFileToCollection, deleteAppFile } from '~/helpers/tauri/file';
+	import { hashPassword } from '~/helpers/crypto';
 	import type { Collection } from '~/types/collections';
 	import { useToast } from 'vue-toastification';
 
@@ -111,6 +117,8 @@
 	const collections = computed(() => collectionsStore.collections);
 	const confirmDeleteCollectionDialog = ref(false);
 	const collectionToDelete = ref<Collection | null>(null);
+	const deleteCollectionFiles = ref(false);
+	const deletingCollection = ref(false);
 
 	const importInputRef = ref<HTMLInputElement | null>(null);
 	const importing = ref(false);
@@ -191,11 +199,7 @@
 			if (!fileEntry) continue;
 			const raw = await fileEntry.async('arraybuffer') as ArrayBuffer;
 			const bytes = new Uint8Array(raw);
-			let contents: Uint8Array = bytes;
-			if (manifest.type === 'encrypted' && password) {
-				contents = await encryptWithPassword(password, bytes);
-			}
-			const relativePath = await saveFileToCollection(collection.id, entry.name, { contents });
+			const relativePath = await saveFileToCollection(collection.id, entry.name, { contents: bytes });
 			collectionsStore.addFileToCollection(collection.id, relativePath, entry.name, manifest.type === 'encrypted');
 		}
 
@@ -205,15 +209,29 @@
 
 	function confirmDeleteCollection(c: Collection) {
 		collectionToDelete.value = c;
+		deleteCollectionFiles.value = false;
 		confirmDeleteCollectionDialog.value = true;
 	}
 
-	function doDeleteCollection() {
-		if (collectionToDelete.value) {
-			collectionsStore.removeCollection(collectionToDelete.value.id);
+	async function doDeleteCollection() {
+		const c = collectionToDelete.value;
+		if (!c) return;
+		deletingCollection.value = true;
+		try {
+			if (deleteCollectionFiles.value) {
+				const filesToDelete = collectionsStore.getFilesForCollection(c.id);
+				for (const f of filesToDelete) {
+					try {
+						await deleteAppFile(f.path);
+					} catch (_) {}
+				}
+			}
+			collectionsStore.removeCollection(c.id);
 			collectionToDelete.value = null;
 			confirmDeleteCollectionDialog.value = false;
 			toast.success('Коллекция удалена');
+		} finally {
+			deletingCollection.value = false;
 		}
 	}
 </script>
