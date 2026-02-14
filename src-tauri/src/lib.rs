@@ -78,13 +78,37 @@ fn save_file_to_app(
   Err("Need either sourcePath or (contents + file_name)".to_string())
 }
 
+/// Read file content from app storage (path previously returned by save_file_to_app).
+#[tauri::command]
+fn read_file_from_app(app: tauri::AppHandle, path: String) -> Result<Vec<u8>, String> {
+  #[cfg(target_os = "android")]
+  let allowed = app
+    .path()
+    .picture_dir()
+    .map_err(|e: tauri::Error| e.to_string())?
+    .to_string_lossy()
+    .to_string();
+  #[cfg(not(target_os = "android"))]
+  let allowed = app
+    .path()
+    .app_data_dir()
+    .map_err(|e: tauri::Error| e.to_string())?
+    .to_string_lossy()
+    .to_string();
+  let path_normalized = Path::new(&path).to_string_lossy().to_string();
+  if !path_normalized.starts_with(&allowed) {
+    return Err("Path not allowed".to_string());
+  }
+  fs::read(&path).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_os::init())
-    .invoke_handler(tauri::generate_handler![save_file_to_app, get_file_name_from_path])
+    .invoke_handler(tauri::generate_handler![save_file_to_app, get_file_name_from_path, read_file_from_app])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(

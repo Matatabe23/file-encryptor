@@ -1,9 +1,32 @@
 <template>
-	<v-container>
-		<v-btn @click="isCreateCollectionModal = true">{{ $t('main.createCollection') }}</v-btn>
-		<v-btn class="ml-4" :loading="savingFile" @click="pickAndSaveFile">
-			Выбрать файл
-		</v-btn>
+	<v-container class="py-6">
+		<div class="flex items-center justify-between mb-6">
+			<h1 class="text-h5">Коллекции</h1>
+			<v-btn color="primary" @click="isCreateCollectionModal = true">
+				{{ $t('main.createCollection') }}
+			</v-btn>
+		</div>
+
+		<v-row v-if="collections.length">
+			<v-col v-for="c in collections" :key="c.id" cols="12" sm="6" md="4">
+				<v-card
+					:to="`/collection/${c.id}`"
+					class="fill-height"
+					hover
+				>
+					<v-card-title class="d-flex align-center gap-2">
+						<v-icon>{{ c.type === 'encrypted' ? 'mdi-lock' : 'mdi-folder' }}</v-icon>
+						{{ c.name }}
+					</v-card-title>
+					<v-card-subtitle>
+						{{ c.type === 'encrypted' ? 'Зашифрованная коллекция' : 'Хранилище' }}
+					</v-card-subtitle>
+				</v-card>
+			</v-col>
+		</v-row>
+		<v-alert v-else type="info" variant="tonal" class="mt-4">
+			Коллекций пока нет. Нажмите «Создать коллекцию», чтобы добавить первую.
+		</v-alert>
 
 		<CreateCollectionModal v-model:isOpen="isCreateCollectionModal" />
 	</v-container>
@@ -11,27 +34,9 @@
 
 <script setup lang="ts">
 	import CreateCollectionModal from '~/components/main/CreateCollectionModal.vue';
-	import { pickAndSaveFile as saveFile } from '~/helpers/tauri';
-	import { useToast } from 'vue-toastification';
+	import { useCollectionsStore } from '~/stores/collections';
 
-	const toast = useToast();
+	const collectionsStore = useCollectionsStore();
 	const isCreateCollectionModal = ref(false);
-	const savingFile = ref(false);
-
-	async function pickAndSaveFile() {
-		if (savingFile.value) return;
-		try {
-			savingFile.value = true;
-			const savedPath = await saveFile();
-			if (savedPath) {
-				toast.success(`Файл сохранён:`,);
-			}
-		} catch (e) {
-			const msg = e instanceof Error ? e.message : String(e);
-			console.error(e);
-			toast.error(`Ошибка сохранения: ${msg}`);
-		} finally {
-			savingFile.value = false;
-		}
-	}
+	const collections = computed(() => collectionsStore.collections);
 </script>

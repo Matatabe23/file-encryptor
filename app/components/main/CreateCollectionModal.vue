@@ -5,9 +5,43 @@
 		</template>
 
 		<template #default>
-			<span>
-				Здесь основной контент модалки. Можно вставлять любые элементы, формы и текст.
-			</span>
+			<div class="flex flex-col gap-4">
+				<v-text-field
+					v-model="name"
+					:label="$t('collections.name')"
+					variant="outlined"
+					density="comfortable"
+					autofocus
+					:error-messages="nameError"
+					@update:model-value="nameError = ''"
+				/>
+				<div>
+					<span class="text-body-2 text-medium-emphasis mb-2 block">{{ $t('collections.type') }}</span>
+					<v-radio-group v-model="type" hide-details density="compact">
+						<v-radio
+							:label="$t('collections.typeStorage')"
+							value="storage"
+							color="primary"
+						/>
+						<v-radio
+							:label="$t('collections.typeEncrypted')"
+							value="encrypted"
+							color="primary"
+						/>
+					</v-radio-group>
+				</div>
+				<v-text-field
+					v-if="type === 'encrypted'"
+					v-model="password"
+					:label="$t('collections.password')"
+					type="password"
+					variant="outlined"
+					density="comfortable"
+					:error-messages="passwordError"
+					autocomplete="new-password"
+					@update:model-value="passwordError = ''"
+				/>
+			</div>
 		</template>
 
 		<template #bottom>
@@ -15,14 +49,18 @@
 				<v-btn
 					class="flex-1"
 					text
-					@click="isOpen = false"
-					>Отмена</v-btn
+					@click="close"
 				>
+					{{ $t('common.cancel') }}
+				</v-btn>
 				<v-btn
 					class="flex-1"
 					color="primary"
-					>Сохранить</v-btn
+					:loading="saving"
+					@click="onSave"
 				>
+					{{ $t('common.save') }}
+				</v-btn>
 			</div>
 		</template>
 	</UniversalModel>
@@ -30,6 +68,67 @@
 
 <script setup lang="ts">
 	import UniversalModel from '../UniversalModel.vue';
+	import { useCollectionsStore } from '~/stores/collections';
+	import { hashPassword } from '~/helpers/crypto';
+	import type { CollectionType } from '~/types/collections';
+	import { useToast } from 'vue-toastification';
 
 	const isOpen = defineModel<boolean>('isOpen');
+	const router = useRouter();
+	const collectionsStore = useCollectionsStore();
+	const toast = useToast();
+
+	const name = ref('');
+	const type = ref<CollectionType>('storage');
+	const password = ref('');
+	const nameError = ref('');
+	const passwordError = ref('');
+	const saving = ref(false);
+
+	function close() {
+		isOpen.value = false;
+		name.value = '';
+		type.value = 'storage';
+		password.value = '';
+		nameError.value = '';
+		passwordError.value = '';
+	}
+
+	async function onSave() {
+		const trimmed = name.value.trim();
+		if (!trimmed) {
+			nameError.value = 'Введите название коллекции';
+			return;
+		}
+		if (type.value === 'encrypted' && !password.value) {
+			passwordError.value = 'Введите пароль для зашифрованной коллекции';
+			return;
+		}
+		if (type.value === 'encrypted' && password.value.length < 4) {
+			passwordError.value = 'Пароль не менее 4 символов';
+			return;
+		}
+
+		saving.value = true;
+		try {
+			let passwordHash: string | undefined;
+			if (type.value === 'encrypted') {
+				passwordHash = await hashPassword(password.value);
+			}
+			const collection = collectionsStore.addCollection(trimmed, type.value, passwordHash);
+			toast.success('Коллекция создана');
+			close();
+			isOpen.value = false;
+			await router.push(`/collection/${collection.id}`);
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			toast.error(msg);
+		} finally {
+			saving.value = false;
+		}
+	}
+
+	watch(isOpen, (open) => {
+		if (!open) close();
+	});
 </script>

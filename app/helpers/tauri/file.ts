@@ -104,3 +104,26 @@ export async function pickAndSaveFile(): Promise<string | null> {
 	const savedPath = await invoke<string>('save_file_to_app', payload)
 	return savedPath
 }
+
+/**
+ * Read file content from app storage (path from save_file_to_app).
+ */
+export async function readAppFile(path: string): Promise<Uint8Array> {
+	const bytes = await invoke<number[]>('read_file_from_app', { path })
+	return new Uint8Array(bytes)
+}
+
+/**
+ * Save encrypted bytes to app storage. Uses "documents" folder and given fileName.
+ * Returns path for storing in collection.
+ */
+export async function saveEncryptedFile(contents: Uint8Array, fileName: string): Promise<string> {
+	const saveType = getSaveFolderTypeFromFileName(fileName)
+	const savedPath = await invoke<string>('save_file_to_app', {
+		saveType,
+		sourcePath: null,
+		contents: Array.from(contents),
+		fileName,
+	})
+	return savedPath
+}
