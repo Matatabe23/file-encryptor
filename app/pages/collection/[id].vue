@@ -77,7 +77,18 @@
 						@click="openFile(f)"
 					>
 						<template #prepend>
-							<v-icon>mdi-file-outline</v-icon>
+							<div class="list-item-prepend">
+								<div v-if="getFileKind(f.name) === 'image'" class="file-thumb file-thumb--square">
+									<img v-if="mediaCache[f.id]?.url" :src="mediaCache[f.id].url" alt="">
+									<v-icon v-else class="file-thumb-placeholder" size="small">mdi-image</v-icon>
+								</div>
+								<div v-else-if="getFileKind(f.name) === 'video'" class="file-thumb file-thumb--square">
+									<video v-if="mediaCache[f.id]?.url" :src="mediaCache[f.id].url" muted autoplay loop playsinline />
+									<v-icon v-else class="file-thumb-placeholder" size="small">mdi-video</v-icon>
+								</div>
+								<v-icon v-else-if="getFileKind(f.name) === 'audio'">mdi-music</v-icon>
+								<v-icon v-else>mdi-file-document-outline</v-icon>
+							</div>
 						</template>
 						<template #append>
 							<v-btn icon variant="text" size="small" @click.stop="confirmDelete(f)">
@@ -87,6 +98,48 @@
 					</v-list-item>
 				</v-list>
 				<p v-else class="text-medium-emphasis">{{ $t('collections.noFiles') }}</p>
+
+				<v-dialog v-model="previewDialog" max-width="90vw" max-height="90vh" persistent scrollable @click:outside="closePreview">
+					<v-card class="preview-dialog-card">
+						<v-card-title class="d-flex align-center">
+							<span class="flex-grow-1 text-truncate">{{ previewName }}</span>
+							<v-btn icon variant="text" @click="closePreview">
+								<v-icon>mdi-close</v-icon>
+							</v-btn>
+						</v-card-title>
+						<v-card-text class="preview-dialog-content">
+							<div v-if="previewLoading" class="preview-loading">
+								<v-progress-circular indeterminate color="primary" size="48" />
+								<span class="mt-2">Загрузка...</span>
+							</div>
+							<img
+								v-else-if="previewType === 'image' && previewUrl"
+								:src="previewUrl"
+								alt=""
+								class="preview-media preview-media--image"
+							>
+							<video
+								v-else-if="previewType === 'video' && previewUrl"
+								:src="previewUrl"
+								controls
+								class="preview-media preview-media--video"
+							/>
+							<audio
+								v-else-if="previewType === 'audio' && previewUrl"
+								:src="previewUrl"
+								controls
+								class="preview-media preview-media--audio"
+							/>
+						</v-card-text>
+						<v-card-actions>
+							<v-spacer />
+							<v-btn color="primary" @click="downloadPreview">
+								<v-icon start>mdi-download</v-icon>
+								Скачать
+							</v-btn>
+						</v-card-actions>
+					</v-card>
+				</v-dialog>
 
 				<v-dialog v-model="confirmDeleteDialog" max-width="400" persistent>
 					<v-card>
@@ -179,6 +232,77 @@
 	const deleteCollectionFiles = ref(false);
 	const deletingCollection = ref(false);
 
+	const previewDialog = ref(false);
+	const previewUrl = ref<string | null>(null);
+	const previewType = ref<'image' | 'video' | 'audio' | null>(null);
+	const previewName = ref('');
+	const previewBlob = ref<Blob | null>(null);
+	const previewLoading = ref(false);
+
+	/** Кэш расшифрованных медиа в памяти: по клику открытие мгновенное. Очищается при выходе и при блокировке. */
+	const mediaCache = ref<Record<string, { blob: Blob; url: string }>>({});
+	const preloadAbort = ref(false);
+
+	const IMAGE_EXT = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico', 'heic', 'heif']);
+	const VIDEO_EXT = new Set(['mp4', 'mkv', 'mov', 'avi', 'webm', 'm4v', '3gp', 'flv', 'wmv']);
+	const AUDIO_EXT = new Set(['mp3', 'wav', 'ogg', 'm4a', 'flac', 'aac', 'wma', 'aiff']);
+
+	function getFileKind(fileName: string): 'image' | 'video' | 'audio' | 'document' {
+		const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+		if (IMAGE_EXT.has(ext)) return 'image';
+		if (VIDEO_EXT.has(ext)) return 'video';
+		if (AUDIO_EXT.has(ext)) return 'audio';
+		return 'document';
+	}
+
+	function clearMediaCache() {
+		for (const entry of Object.values(mediaCache.value)) {
+			URL.revokeObjectURL(entry.url);
+		}
+		mediaCache.value = {};
+	}
+
+	/** Предзагрузка медиа в память (расшифровка в фоне) для мгновенного открытия. */
+	async function preloadMedia() {
+		const c = collection.value;
+		const list = files.value;
+		if (!c || !list.length) return;
+		const pwd = c.type === 'encrypted' ? sessionPassword.value : null;
+		if (c.type === 'encrypted' && !pwd) return;
+		preloadAbort.value = false;
+		for (const f of list) {
+			if (preloadAbort.value) break;
+			const kind = getFileKind(f.name);
+			if (kind !== 'image' && kind !== 'video' && kind !== 'audio') continue;
+			if (mediaCache.value[f.id]) continue;
+			try {
+				let bytes = await readAppFile(f.path);
+				if (f.encrypted && pwd) bytes = await decryptWithPassword(pwd, bytes);
+				const blob = new Blob([bytes]);
+				const url = URL.createObjectURL(blob);
+				mediaCache.value = { ...mediaCache.value, [f.id]: { blob, url } };
+			} catch (_) {}
+		}
+	}
+
+	function closePreview() {
+		if (previewUrl.value) {
+			URL.revokeObjectURL(previewUrl.value);
+			previewUrl.value = null;
+		}
+		previewBlob.value = null;
+		previewType.value = null;
+		previewName.value = '';
+		previewDialog.value = false;
+	}
+
+	function downloadPreview() {
+		if (previewBlob.value && previewName.value) {
+			downloadBlob(previewBlob.value, previewName.value);
+			toast.success('Файл скачивается');
+		}
+	}
+
 	async function unlock() {
 		if (!collection.value?.passwordHash) return;
 		passwordError.value = '';
@@ -248,19 +372,63 @@
 	}
 
 	async function openFile(file: CollectionFile) {
+		const kind = getFileKind(file.name);
+		const cached = mediaCache.value[file.id];
+
+		if (kind === 'image' || kind === 'video' || kind === 'audio') {
+			if (cached) {
+				closePreview();
+				previewUrl.value = URL.createObjectURL(cached.blob);
+				previewType.value = kind;
+				previewName.value = file.name;
+				previewBlob.value = cached.blob;
+				previewLoading.value = false;
+				previewDialog.value = true;
+				return;
+			}
+			closePreview();
+			previewLoading.value = true;
+			previewName.value = file.name;
+			previewType.value = kind;
+			previewDialog.value = true;
+			try {
+				let bytes = await readAppFile(file.path);
+				if (file.encrypted && collection.value?.type === 'encrypted') {
+					const pwd = sessionPassword.value;
+					if (!pwd) {
+						toast.error('Нужен пароль');
+						previewLoading.value = false;
+						return;
+					}
+					bytes = await decryptWithPassword(pwd, bytes);
+				}
+				const blob = new Blob([bytes]);
+				const urlForPreview = URL.createObjectURL(blob);
+				const urlForCache = URL.createObjectURL(blob);
+				previewUrl.value = urlForPreview;
+				previewBlob.value = blob;
+				mediaCache.value = { ...mediaCache.value, [file.id]: { blob, url: urlForCache } };
+			} catch (e) {
+				const msg = e instanceof Error ? e.message : String(e);
+				toast.error(msg);
+				previewDialog.value = false;
+			} finally {
+				previewLoading.value = false;
+			}
+			return;
+		}
+
 		try {
-			const bytes = await readAppFile(file.path);
+			let bytes: Uint8Array = await readAppFile(file.path);
 			if (file.encrypted && collection.value?.type === 'encrypted') {
 				const pwd = sessionPassword.value;
 				if (!pwd) {
 					toast.error('Нужен пароль');
 					return;
 				}
-				const decrypted = await decryptWithPassword(pwd, bytes);
-				downloadBlob(new Blob([decrypted]), file.name);
-			} else {
-				downloadBlob(new Blob([bytes]), file.name);
+				bytes = await decryptWithPassword(pwd, bytes);
 			}
+			downloadBlob(new Blob([bytes]), file.name);
 			toast.success('Файл скачивается');
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
@@ -370,8 +538,111 @@
 		sessionPassword.value = '';
 		passwordInput.value = '';
 		passwordError.value = '';
+		preloadAbort.value = true;
+		clearMediaCache();
+		closePreview();
 	});
 	watch(collection, (c) => {
 		if (!c) router.replace('/');
 	}, { immediate: true });
+
+	watch(
+		() => [files.value.length, sessionPassword.value, collection.value?.type] as const,
+		() => {
+			if (collection.value?.type === 'encrypted' && !sessionPassword.value) return;
+			preloadMedia();
+		},
+		{ immediate: true },
+	);
+
+	onBeforeUnmount(() => {
+		preloadAbort.value = true;
+		clearMediaCache();
+		closePreview();
+	});
 </script>
+
+<style scoped>
+.preview-dialog-card {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	max-width: 90vw;
+	max-height: 90vh;
+}
+
+.preview-dialog-content {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: 200px;
+	max-height: 70vh;
+	padding: 16px;
+	overflow: auto;
+}
+
+.preview-media {
+	display: block;
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: contain;
+}
+
+.preview-media--image {
+	width: auto;
+	height: auto;
+	max-height: 70vh;
+}
+
+.preview-media--video {
+	width: 100%;
+	height: auto;
+	max-height: 70vh;
+}
+
+.preview-media--audio {
+	width: 100%;
+	min-width: 280px;
+}
+
+.preview-loading {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	min-height: 200px;
+	color: rgba(var(--v-theme-on-surface), 0.7);
+}
+
+.file-thumb {
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
+	background: rgba(255, 255, 255, 0.06);
+}
+
+.file-thumb--square {
+	width: 56px;
+	height: 56px;
+	border-radius: 8px;
+}
+
+.file-thumb--square img,
+.file-thumb--square video {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
+.file-thumb-placeholder {
+	opacity: 0.6;
+}
+
+.list-item-prepend {
+	margin-right: 12px;
+}
+</style>
