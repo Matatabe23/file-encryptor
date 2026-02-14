@@ -6,10 +6,12 @@
 		</div>
 
 		<template v-else>
-			<!-- Запрос пароля для зашифрованной коллекции -->
 			<v-card v-if="collection.type === 'encrypted' && !sessionPassword" class="pa-6">
 				<v-card-title>{{ $t('collections.enterPassword') }}</v-card-title>
 				<v-card-text>
+					<p class="text-caption text-medium-emphasis mb-3">
+						{{ $t('collections.passwordHint') }}
+					</p>
 					<v-text-field
 						v-model="passwordInput"
 						:label="$t('collections.password')"
@@ -38,16 +40,30 @@
 						<v-icon start size="small">mdi-lock</v-icon>
 						Зашифровано
 					</v-chip>
+					<v-btn
+						icon
+						variant="text"
+						color="error"
+						:title="$t('collections.deleteCollection')"
+						@click="confirmDeleteCollectionPage"
+					>
+						<v-icon>mdi-delete-outline</v-icon>
+					</v-btn>
 				</div>
 
-				<div class="mb-4">
-					<v-btn
-						color="primary"
-						:loading="addingFile"
-						@click="addFile"
-					>
+				<div class="d-flex flex-wrap gap-2 mb-4">
+					<v-btn color="primary" :loading="addingFile" @click="addFile">
 						<v-icon start>mdi-plus</v-icon>
 						{{ $t('collections.addFile') }}
+					</v-btn>
+					<v-btn
+						variant="outlined"
+						:loading="exporting"
+						:disabled="!files.length"
+						@click="openExportDialog"
+					>
+						<v-icon start>mdi-folder-zip-outline</v-icon>
+						{{ $t('collections.downloadCollection') }}
 					</v-btn>
 				</div>
 
@@ -81,14 +97,52 @@
 						</v-card-actions>
 					</v-card>
 				</v-dialog>
+
+				<v-dialog v-model="confirmDeleteCollectionDialog" max-width="400" persistent>
+					<v-card>
+						<v-card-title>{{ $t('collections.deleteCollection') }}</v-card-title>
+						<v-card-text>
+							{{ $t('collections.deleteCollectionConfirm', { name: collection.name }) }}
+						</v-card-text>
+						<v-card-actions>
+							<v-btn variant="text" @click="confirmDeleteCollectionDialog = false">
+								{{ $t('common.cancel') }}
+							</v-btn>
+							<v-btn color="error" variant="text" @click="doDeleteCollection">
+								{{ $t('collections.delete') }}
+							</v-btn>
+						</v-card-actions>
+					</v-card>
+				</v-dialog>
+
+				<v-dialog v-model="exportDialog" max-width="400" persistent>
+					<v-card>
+						<v-card-title>{{ $t('collections.downloadCollection') }}</v-card-title>
+						<v-card-text>
+							<v-checkbox
+								v-model="exportDeleteAfter"
+								:label="$t('collections.downloadCollectionConfirm')"
+								hide-details
+								density="compact"
+							/>
+						</v-card-text>
+						<v-card-actions>
+							<v-btn variant="text" @click="exportDialog = false">{{ $t('common.cancel') }}</v-btn>
+							<v-btn color="primary" :loading="exporting" @click="doExportCollection">
+								{{ $t('collections.downloadCollection') }}
+							</v-btn>
+						</v-card-actions>
+					</v-card>
+				</v-dialog>
 			</template>
 		</template>
 	</v-container>
 </template>
 
 <script setup lang="ts">
+	import JSZip from 'jszip';
 	import { useCollectionsStore } from '~/stores/collections';
-	import { readAppFile, getSaveFolderTypeFromFileName, saveEncryptedFile } from '~/helpers/tauri/file';
+	import { readAppFile, saveFileToCollection, deleteAppFile } from '~/helpers/tauri/file';
 	import { encryptWithPassword, decryptWithPassword, verifyPassword } from '~/helpers/crypto';
 	import type { CollectionFile } from '~/types/collections';
 	import { useToast } from 'vue-toastification';
@@ -110,8 +164,12 @@
 	const passwordError = ref('');
 	const unlocking = ref(false);
 	const addingFile = ref(false);
+	const exporting = ref(false);
+	const exportDialog = ref(false);
+	const exportDeleteAfter = ref(false);
 	const confirmDeleteDialog = ref(false);
 	const fileToDelete = ref<CollectionFile | null>(null);
+	const confirmDeleteCollectionDialog = ref(false);
 
 	async function unlock() {
 		if (!collection.value?.passwordHash) return;
@@ -159,23 +217,18 @@
 				const data = await readFile(path);
 				const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data);
 				const encrypted = await encryptWithPassword(pwd, bytes);
-				const savedPath = await saveEncryptedFile(encrypted, fileName);
-				collectionsStore.addFileToCollection(collection.value.id, savedPath, fileName, true);
+				const relativePath = await saveFileToCollection(collection.value.id, fileName, { contents: encrypted });
+				collectionsStore.addFileToCollection(collection.value.id, relativePath, fileName, true);
 			} else {
-				const saveType = getSaveFolderTypeFromFileName(fileName);
-				const payload: { saveType: string; sourcePath: string | null; contents: number[] | null; fileName: string | null } = {
-					saveType,
-					sourcePath: path.startsWith('content:') ? null : path,
-					contents: null,
-					fileName: path.startsWith('content:') ? fileName : null,
-				};
 				if (path.startsWith('content:')) {
 					const data = await readFile(path);
-					payload.contents = Array.from(data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data));
-					payload.fileName = fileName;
+					const contents = data instanceof ArrayBuffer ? new Uint8Array(data) : new Uint8Array(data);
+					const relativePath = await saveFileToCollection(collection.value.id, fileName, { contents });
+					collectionsStore.addFileToCollection(collection.value.id, relativePath, fileName, false);
+				} else {
+					const relativePath = await saveFileToCollection(collection.value.id, fileName, { sourcePath: path });
+					collectionsStore.addFileToCollection(collection.value.id, relativePath, fileName, false);
 				}
-				const savedPath = await invoke<string>('save_file_to_app', payload);
-				collectionsStore.addFileToCollection(collection.value.id, savedPath, fileName, false);
 			}
 			toast.success('Файл добавлен');
 		} catch (e) {
@@ -196,27 +249,75 @@
 					return;
 				}
 				const decrypted = await decryptWithPassword(pwd, bytes);
-				// Скачивание как файл (создаём blob и ссылку)
-				const blob = new Blob([decrypted]);
-				const url = URL.createObjectURL(blob);
-				const a = document.createElement('a');
-				a.href = url;
-				a.download = file.name;
-				a.click();
-				URL.revokeObjectURL(url);
+				downloadBlob(new Blob([decrypted]), file.name);
 			} else {
-				const blob = new Blob([bytes]);
-				const url = URL.createObjectURL(blob);
-				const a = document.createElement('a');
-				a.href = url;
-				a.download = file.name;
-				a.click();
-				URL.revokeObjectURL(url);
+				downloadBlob(new Blob([bytes]), file.name);
 			}
 			toast.success('Файл скачивается');
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
 			toast.error(msg);
+		}
+	}
+
+	function downloadBlob(blob: Blob, name: string) {
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = name;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function openExportDialog() {
+		exportDeleteAfter.value = false;
+		exportDialog.value = true;
+	}
+
+	async function doExportCollection() {
+		if (!collection.value || !files.value.length) return;
+		exporting.value = true;
+		try {
+			const zip = new JSZip();
+			const manifest = {
+				name: collection.value.name,
+				type: collection.value.type,
+				passwordHash: collection.value.passwordHash ?? null,
+				files: files.value.map((f) => ({ name: f.name, encrypted: f.encrypted })),
+			};
+			zip.file('manifest.json', JSON.stringify(manifest, null, 2));
+
+			for (const f of files.value) {
+				let bytes = await readAppFile(f.path);
+				if (f.encrypted && collection.value?.type === 'encrypted') {
+					const pwd = sessionPassword.value;
+					if (pwd) bytes = await decryptWithPassword(pwd, bytes);
+				}
+				zip.file(f.name, bytes);
+			}
+
+			const blob = await zip.generateAsync({ type: 'blob' });
+			downloadBlob(blob, `${collection.value.name}.zip`);
+
+			if (exportDeleteAfter.value) {
+				for (const f of files.value) {
+					try {
+						await deleteAppFile(f.path);
+					} catch (_) {}
+				}
+				collectionsStore.removeCollection(collection.value.id);
+				exportDialog.value = false;
+				toast.success('Коллекция скачана и удалена');
+				router.push('/');
+				return;
+			}
+			exportDialog.value = false;
+			toast.success('Коллекция скачана');
+		} catch (e) {
+			const msg = e instanceof Error ? e.message : String(e);
+			toast.error(msg);
+		} finally {
+			exporting.value = false;
 		}
 	}
 
@@ -231,6 +332,19 @@
 			fileToDelete.value = null;
 			confirmDeleteDialog.value = false;
 			toast.success('Файл удалён');
+		}
+	}
+
+	function confirmDeleteCollectionPage() {
+		confirmDeleteCollectionDialog.value = true;
+	}
+
+	function doDeleteCollection() {
+		if (collection.value) {
+			collectionsStore.removeCollection(collection.value.id);
+			confirmDeleteCollectionDialog.value = false;
+			toast.success('Коллекция удалена');
+			router.push('/');
 		}
 	}
 

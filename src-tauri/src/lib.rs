@@ -1,9 +1,33 @@
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tauri::Manager;
 
-/// Единая структура: на ПК app_data/files/{save_type}, на Android — внешняя папка приложения (Pictures/...), куда точно можно писать.
-fn files_dir_for_type(app: &tauri::AppHandle, save_type: &str) -> Result<std::path::PathBuf, String> {
+/// Базовая папка для файлов приложения. Относительные пути хранятся от неё.
+fn files_base_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+  #[cfg(target_os = "android")]
+  {
+    app
+      .path()
+      .picture_dir()
+      .map_err(|e: tauri::Error| e.to_string())
+  }
+  #[cfg(not(target_os = "android"))]
+  {
+    app
+      .path()
+      .app_data_dir()
+      .map_err(|e: tauri::Error| e.to_string())
+      .map(|p| p.join("files"))
+  }
+}
+
+/// Папка конкретной коллекции: base/collections/{collection_id}
+fn collection_dir(app: &tauri::AppHandle, collection_id: &str) -> Result<PathBuf, String> {
+  Ok(files_base_dir(app)?.join("collections").join(collection_id))
+}
+
+/// Единая структура: на ПК app_data/files/{save_type}, на Android — picture_dir/{save_type}. Оставлено для обратной совместимости.
+fn files_dir_for_type(app: &tauri::AppHandle, save_type: &str) -> Result<PathBuf, String> {
   #[cfg(target_os = "android")]
   {
     let base = app
@@ -20,6 +44,15 @@ fn files_dir_for_type(app: &tauri::AppHandle, save_type: &str) -> Result<std::pa
       .map_err(|e: tauri::Error| e.to_string())?;
     Ok(base.join("files").join(save_type))
   }
+}
+
+#[tauri::command]
+fn get_files_base_path(app: tauri::AppHandle) -> Result<String, String> {
+  let base = files_base_dir(&app)?;
+  base
+    .to_str()
+    .map(String::from)
+    .ok_or_else(|| "Invalid base path".to_string())
 }
 
 #[tauri::command]
@@ -78,28 +111,78 @@ fn save_file_to_app(
   Err("Need either sourcePath or (contents + file_name)".to_string())
 }
 
-/// Read file content from app storage (path previously returned by save_file_to_app).
+/// Сохранить файл в папку коллекции. Возвращает относительный путь: collections/{collection_id}/{file_name}
+#[tauri::command]
+fn save_file_to_collection(
+  app: tauri::AppHandle,
+  collection_id: String,
+  file_name: String,
+  source_path: Option<String>,
+  contents: Option<Vec<u8>>,
+) -> Result<String, String> {
+  let dir = collection_dir(&app, &collection_id)?;
+  fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+  let name = Path::new(&file_name)
+    .file_name()
+    .and_then(|n| n.to_str())
+    .ok_or_else(|| "Invalid file name".to_string())?
+    .to_string();
+
+  if let Some(ref path) = source_path {
+    let dest = dir.join(&name);
+    fs::copy(path, &dest).map_err(|e| e.to_string())?;
+    let relative = format!("collections/{}/{}", collection_id, name);
+    return Ok(relative);
+  }
+
+  if let Some(data) = contents {
+    let dest = dir.join(&name);
+    fs::write(&dest, &data).map_err(|e| e.to_string())?;
+    let relative = format!("collections/{}/{}", collection_id, name);
+    return Ok(relative);
+  }
+
+  Err("Need either source_path or contents".to_string())
+}
+
+/// Read file content. path — относительный (collections/...) или полный (для совместимости).
 #[tauri::command]
 fn read_file_from_app(app: tauri::AppHandle, path: String) -> Result<Vec<u8>, String> {
-  #[cfg(target_os = "android")]
-  let allowed = app
-    .path()
-    .picture_dir()
-    .map_err(|e: tauri::Error| e.to_string())?
-    .to_string_lossy()
-    .to_string();
-  #[cfg(not(target_os = "android"))]
-  let allowed = app
-    .path()
-    .app_data_dir()
-    .map_err(|e: tauri::Error| e.to_string())?
-    .to_string_lossy()
-    .to_string();
-  let path_normalized = Path::new(&path).to_string_lossy().to_string();
-  if !path_normalized.starts_with(&allowed) {
+  let base = files_base_dir(&app)?;
+  let base_str = base.to_string_lossy().to_string();
+  let path_buf = PathBuf::from(&path);
+  let full = if path_buf.is_absolute() {
+    path_buf
+  } else {
+    base.join(path)
+  };
+  let full_str = full.to_string_lossy().to_string();
+  if !full_str.starts_with(&base_str) {
     return Err("Path not allowed".to_string());
   }
-  fs::read(&path).map_err(|e| e.to_string())
+  fs::read(&full).map_err(|e| e.to_string())
+}
+
+/// Удалить файл по относительному или полному пути в пределах base.
+#[tauri::command]
+fn delete_app_file(app: tauri::AppHandle, path: String) -> Result<(), String> {
+  let base = files_base_dir(&app)?;
+  let base_str = base.to_string_lossy().to_string();
+  let path_buf = PathBuf::from(&path);
+  let full = if path_buf.is_absolute() {
+    path_buf
+  } else {
+    base.join(path)
+  };
+  let full_str = full.to_string_lossy().to_string();
+  if !full_str.starts_with(&base_str) {
+    return Err("Path not allowed".to_string());
+  }
+  if full.exists() {
+    fs::remove_file(&full).map_err(|e| e.to_string())?;
+  }
+  Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -108,7 +191,14 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .plugin(tauri_plugin_fs::init())
     .plugin(tauri_plugin_os::init())
-    .invoke_handler(tauri::generate_handler![save_file_to_app, get_file_name_from_path, read_file_from_app])
+    .invoke_handler(tauri::generate_handler![
+    get_files_base_path,
+    save_file_to_app,
+    save_file_to_collection,
+    get_file_name_from_path,
+    read_file_from_app,
+    delete_app_file,
+  ])
     .setup(|app| {
       if cfg!(debug_assertions) {
         app.handle().plugin(
