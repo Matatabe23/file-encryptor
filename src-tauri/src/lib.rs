@@ -2,24 +2,13 @@ use std::fs;
 use std::path::Path;
 use tauri::Manager;
 
-/// На Android возвращает папку, видимую пользователю (Фото). На десктопе — app_data_dir/files.
-fn files_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-  #[cfg(target_os = "android")]
-  {
-    let base = app
-      .path()
-      .picture_dir()
-      .map_err(|e: tauri::Error| e.to_string())?;
-    Ok(base.join("FileEncryptor"))
-  }
-  #[cfg(not(target_os = "android"))]
-  {
-    let base = app
-      .path()
-      .app_data_dir()
-      .map_err(|e: tauri::Error| e.to_string())?;
-    Ok(base.join("files"))
-  }
+/// Единая структура на ПК и телефоне: base/files/{save_type}. Без лишней вложенности (без FileEncryptor).
+fn files_dir_for_type(app: &tauri::AppHandle, save_type: &str) -> Result<std::path::PathBuf, String> {
+  let base = app
+    .path()
+    .app_data_dir()
+    .map_err(|e: tauri::Error| e.to_string())?;
+  Ok(base.join("files").join(save_type))
 }
 
 #[tauri::command]
@@ -30,11 +19,12 @@ fn get_file_name_from_path(app: tauri::AppHandle, path: String) -> Option<String
 #[tauri::command]
 fn save_file_to_app(
   app: tauri::AppHandle,
+  save_type: String,
   source_path: Option<String>,
   contents: Option<Vec<u8>>,
   file_name: Option<String>,
 ) -> Result<String, String> {
-  let dir = files_dir(&app)?;
+  let dir = files_dir_for_type(&app, &save_type)?;
   fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
 
   if let Some(ref path) = source_path {
