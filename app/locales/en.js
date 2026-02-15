@@ -12,6 +12,12 @@ export default {
 		cancel: 'Cancel',
 		save: 'Save'
 	},
+	update: {
+		title: 'Update available',
+		message: 'New version {version} is available. Download and install?',
+		download: 'Download',
+		later: 'Later'
+	},
 	collections: {
 		name: 'Collection name',
 		type: 'Collection type',

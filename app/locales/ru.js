@@ -15,6 +15,12 @@ export default {
 		cancel: 'Отмена',
 		save: 'Сохранить'
 	},
+	update: {
+		title: 'Доступно обновление',
+		message: 'Вышла новая версия {version}. Скачать и установить?',
+		download: 'Скачать',
+		later: 'Позже'
+	},
 	collections: {
 		name: 'Название коллекции',
 		type: 'Тип коллекции',
