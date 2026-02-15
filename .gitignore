@@ -1,3 +1,6 @@
+# Build outputs (APK, IPA, installers)
+build
+
 # Nuxt dev/build outputs
 .output
 .data

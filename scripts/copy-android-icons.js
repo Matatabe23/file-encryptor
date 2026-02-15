@@ -2,9 +2,11 @@
  * Копирует сгенерированные Tauri иконки из src-tauri/icons/android
  * в Android-проект gen/android/app/src/main/res
  */
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const src = path.join(root, 'src-tauri', 'icons', 'android');
 const dst = path.join(root, 'src-tauri', 'gen', 'android', 'app', 'src', 'main', 'res');

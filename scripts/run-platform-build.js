@@ -30,6 +30,7 @@ try {
     // macos | windows — обычный tauri build для текущей ОС
     execSync(`${iconCmd} && tauri build`, { stdio: 'inherit', cwd: root, shell: true });
   }
+  execSync(`node scripts/copy-to-build.js ${platform}`, { stdio: 'inherit', cwd: root });
 } catch (e) {
   process.exit(e.status ?? 1);
 }
