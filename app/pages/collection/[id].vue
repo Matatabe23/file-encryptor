@@ -2,7 +2,7 @@
 	<v-container class="py-6">
 		<div v-if="!collection" class="text-center py-8">
 			<v-progress-circular indeterminate color="primary" />
-			<p class="mt-4">Загрузка...</p>
+			<p class="mt-4">{{ $t('common.loading') }}</p>
 		</div>
 
 		<template v-else>
@@ -38,7 +38,7 @@
 					<h1 class="text-h5 flex-grow-1">{{ collection.name }}</h1>
 					<v-chip v-if="collection.type === 'encrypted'" color="primary" size="small">
 						<v-icon start size="small">mdi-lock</v-icon>
-						Зашифровано
+						{{ $t('collections.encrypted') }}
 					</v-chip>
 					<v-btn
 						icon
@@ -110,7 +110,7 @@
 						<v-card-text class="preview-dialog-content">
 							<div v-if="previewLoading" class="preview-loading">
 								<v-progress-circular indeterminate color="primary" size="48" />
-								<span class="mt-2">Загрузка...</span>
+								<span class="mt-2">{{ $t('common.loading') }}</span>
 							</div>
 							<img
 								v-else-if="previewType === 'image' && previewUrl"
@@ -135,7 +135,7 @@
 							<v-spacer />
 							<v-btn color="primary" @click="downloadPreview">
 								<v-icon start>mdi-download</v-icon>
-								Скачать
+								{{ $t('collections.download') }}
 							</v-btn>
 						</v-card-actions>
 					</v-card>
@@ -143,10 +143,10 @@
 
 				<v-dialog v-model="confirmDeleteDialog" max-width="400" persistent>
 					<v-card>
-						<v-card-title>Удалить файл?</v-card-title>
+						<v-card-title>{{ $t('collections.deleteFileTitle') }}</v-card-title>
 						<v-card-actions>
-							<v-btn variant="text" @click="confirmDeleteDialog = false">Отмена</v-btn>
-							<v-btn color="error" variant="text" @click="doDelete">Удалить</v-btn>
+							<v-btn variant="text" @click="confirmDeleteDialog = false">{{ $t('common.cancel') }}</v-btn>
+							<v-btn color="error" variant="text" @click="doDelete">{{ $t('collections.delete') }}</v-btn>
 						</v-card-actions>
 					</v-card>
 				</v-dialog>
@@ -205,6 +205,7 @@
 	import { encryptWithPassword, decryptWithPassword, verifyPassword } from '~/helpers/crypto';
 	import type { CollectionFile } from '~/types/collections';
 	import { useToast } from 'vue-toastification';
+	import { useI18n } from 'vue-i18n';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { readFile } from '@tauri-apps/plugin-fs';
 	import { invoke } from '@tauri-apps/api/core';
@@ -213,6 +214,7 @@
 	const router = useRouter();
 	const collectionsStore = useCollectionsStore();
 	const toast = useToast();
+	const { t } = useI18n();
 
 	const id = computed(() => route.params.id as string);
 	const collection = computed(() => collectionsStore.getCollection(id.value));
@@ -299,7 +301,7 @@
 	function downloadPreview() {
 		if (previewBlob.value && previewName.value) {
 			downloadBlob(previewBlob.value, previewName.value);
-			toast.success('Файл скачивается');
+			toast.success(t('toast.fileDownloading'));
 		}
 	}
 
@@ -313,7 +315,7 @@
 				sessionPassword.value = passwordInput.value;
 				passwordInput.value = '';
 			} else {
-				passwordError.value = 'Неверный пароль';
+				passwordError.value = t('errors.wrongPassword');
 			}
 		} catch (e) {
 			passwordError.value = e instanceof Error ? e.message : String(e);
@@ -342,7 +344,7 @@
 			if (collection.value.type === 'encrypted') {
 				const pwd = sessionPassword.value;
 				if (!pwd) {
-					toast.error('Введите пароль');
+					toast.error(t('errors.enterPassword'));
 					addingFile.value = false;
 					return;
 				}
@@ -362,7 +364,7 @@
 					collectionsStore.addFileToCollection(collection.value.id, relativePath, fileName, false);
 				}
 			}
-			toast.success('Файл добавлен');
+			toast.success(t('toast.fileAdded'));
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
 			toast.error(msg);
@@ -396,7 +398,7 @@
 				if (file.encrypted && collection.value?.type === 'encrypted') {
 					const pwd = sessionPassword.value;
 					if (!pwd) {
-						toast.error('Нужен пароль');
+						toast.error(t('errors.passwordRequired'));
 						previewLoading.value = false;
 						return;
 					}
@@ -423,13 +425,13 @@
 			if (file.encrypted && collection.value?.type === 'encrypted') {
 				const pwd = sessionPassword.value;
 				if (!pwd) {
-					toast.error('Нужен пароль');
+					toast.error(t('errors.passwordRequired'));
 					return;
 				}
 				bytes = await decryptWithPassword(pwd, bytes);
 			}
 			downloadBlob(new Blob([bytes]), file.name);
-			toast.success('Файл скачивается');
+			toast.success(t('toast.fileDownloading'));
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
 			toast.error(msg);
@@ -479,12 +481,12 @@
 				}
 				collectionsStore.removeCollection(collection.value.id);
 				exportDialog.value = false;
-				toast.success('Коллекция скачана и удалена');
+				toast.success(t('toast.collectionExportedAndDeleted'));
 				router.push('/');
 				return;
 			}
 			exportDialog.value = false;
-			toast.success('Коллекция скачана');
+			toast.success(t('toast.collectionExported'));
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
 			toast.error(msg);
@@ -503,7 +505,7 @@
 			collectionsStore.removeFile(fileToDelete.value.id);
 			fileToDelete.value = null;
 			confirmDeleteDialog.value = false;
-			toast.success('Файл удалён');
+			toast.success(t('toast.fileDeleted'));
 		}
 	}
 
@@ -527,7 +529,7 @@
 			}
 			collectionsStore.removeCollection(c.id);
 			confirmDeleteCollectionDialog.value = false;
-			toast.success('Коллекция удалена');
+			toast.success(t('toast.collectionDeleted'));
 			router.push('/');
 		} finally {
 			deletingCollection.value = false;

@@ -72,11 +72,13 @@
 	import { hashPassword } from '~/helpers/crypto';
 	import type { CollectionType } from '~/types/collections';
 	import { useToast } from 'vue-toastification';
+	import { useI18n } from 'vue-i18n';
 
 	const isOpen = defineModel<boolean>('isOpen');
 	const router = useRouter();
 	const collectionsStore = useCollectionsStore();
 	const toast = useToast();
+	const { t } = useI18n();
 
 	const name = ref('');
 	const type = ref<CollectionType>('storage');
@@ -97,15 +99,15 @@
 	async function onSave() {
 		const trimmed = name.value.trim();
 		if (!trimmed) {
-			nameError.value = 'Введите название коллекции';
+			nameError.value = t('createCollection.enterName');
 			return;
 		}
 		if (type.value === 'encrypted' && !password.value) {
-			passwordError.value = 'Введите пароль для зашифрованной коллекции';
+			passwordError.value = t('createCollection.enterPasswordForEncrypted');
 			return;
 		}
 		if (type.value === 'encrypted' && password.value.length < 4) {
-			passwordError.value = 'Пароль не менее 4 символов';
+			passwordError.value = t('createCollection.passwordMinLength');
 			return;
 		}
 
@@ -116,7 +118,7 @@
 				passwordHash = await hashPassword(password.value);
 			}
 			const collection = collectionsStore.addCollection(trimmed, type.value, passwordHash);
-			toast.success('Коллекция создана');
+			toast.success(t('toast.collectionCreated'));
 			close();
 			isOpen.value = false;
 			await router.push(`/collection/${collection.id}`);

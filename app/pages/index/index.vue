@@ -1,7 +1,7 @@
 <template>
 	<v-container class="py-6">
 		<div class="d-flex flex-wrap align-center gap-3 mb-6">
-			<h1 class="text-h5">Коллекции</h1>
+			<h1 class="text-h5">{{ $t('main.collectionsTitle') }}</h1>
 			<v-btn color="primary" @click="isCreateCollectionModal = true">
 				{{ $t('main.createCollection') }}
 			</v-btn>
@@ -24,7 +24,7 @@
 							<span class="flex-grow-1">{{ c.name }}</span>
 						</v-card-title>
 						<v-card-subtitle class="px-0">
-							{{ c.type === 'encrypted' ? 'Зашифрованная коллекция' : 'Хранилище' }}
+							{{ c.type === 'encrypted' ? $t('main.collectionTypeEncrypted') : $t('main.collectionTypeStorage') }}
 						</v-card-subtitle>
 					</div>
 					<div class="d-flex justify-end pa-2 pt-0">
@@ -43,7 +43,7 @@
 			</v-col>
 		</v-row>
 		<v-alert v-else type="info" variant="tonal" class="mt-4">
-			Коллекций пока нет. Нажмите «Создать коллекцию», чтобы добавить первую.
+			{{ $t('main.collectionsEmpty') }}
 		</v-alert>
 
 		<v-dialog v-model="confirmDeleteCollectionDialog" max-width="400" persistent>
@@ -71,7 +71,7 @@
 
 		<v-dialog v-model="importPasswordDialog" max-width="400" persistent>
 			<v-card>
-				<v-card-title>Пароль коллекции</v-card-title>
+				<v-card-title>{{ $t('collections.collectionPassword') }}</v-card-title>
 				<v-card-text>
 					<v-text-field
 						v-model="importPassword"
@@ -102,6 +102,7 @@
 	import { hashPassword } from '~/helpers/crypto';
 	import type { Collection } from '~/types/collections';
 	import { useToast } from 'vue-toastification';
+	import { useI18n } from 'vue-i18n';
 
 	interface ImportManifest {
 		name: string;
@@ -113,6 +114,7 @@
 	const router = useRouter();
 	const collectionsStore = useCollectionsStore();
 	const toast = useToast();
+	const { t } = useI18n();
 	const isCreateCollectionModal = ref(false);
 	const collections = computed(() => collectionsStore.collections);
 	const confirmDeleteCollectionDialog = ref(false);
@@ -151,13 +153,13 @@
 			const zip = await JSZip.loadAsync(file);
 			const manifestEntry = zip.file('manifest.json');
 			if (!manifestEntry) {
-				toast.error('Неверный формат архива: нет manifest.json');
+				toast.error(t('errors.invalidArchiveFormat'));
 				return;
 			}
 			const manifestJson = await manifestEntry.async('string');
 			const manifest = JSON.parse(manifestJson) as ImportManifest;
 			if (!manifest.name || !manifest.files || !Array.isArray(manifest.files)) {
-				toast.error('Неверный формат manifest.json');
+				toast.error(t('errors.invalidManifestFormat'));
 				return;
 			}
 			if (manifest.type === 'encrypted') {
@@ -203,7 +205,7 @@
 			collectionsStore.addFileToCollection(collection.id, relativePath, entry.name, manifest.type === 'encrypted');
 		}
 
-		toast.success('Коллекция загружена');
+		toast.success(t('toast.collectionImported'));
 		router.push(`/collection/${collection.id}`);
 	}
 
@@ -229,7 +231,7 @@
 			collectionsStore.removeCollection(c.id);
 			collectionToDelete.value = null;
 			confirmDeleteCollectionDialog.value = false;
-			toast.success('Коллекция удалена');
+			toast.success(t('toast.collectionDeleted'));
 		} finally {
 			deletingCollection.value = false;
 		}
