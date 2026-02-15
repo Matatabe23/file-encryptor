@@ -2,7 +2,7 @@
 
 Десктопное и мобильное приложение для хранения и шифрования файлов. Создано на [Tauri](https://tauri.app/) + [Nuxt](https://nuxt.com/) + [Vuetify](https://vuetifyjs.com/).
 
-**Разработчик:** [QUGOR](https://github.com/QUGOR)
+**Разработчик:** [QUGOR](https://github.com/Matatabe23)
 
 ---
 
