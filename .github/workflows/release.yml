@@ -117,10 +117,14 @@ jobs:
         with:
           path: release-artifacts
 
+      - name: List downloaded artifacts
+        run: find release-artifacts -type f | head -50
+
       - name: Prepare release files
         run: |
           mkdir -p release-upload
-          find release-artifacts -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.apk' -o -name '*.aab' -o -name '*.dmg' -o -name '*.ipa' \) -exec cp {} release-upload/ \; || true
+          find release-artifacts -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.apk' -o -name '*.aab' -o -name '*.dmg' -o -name '*.ipa' \) -print0 | xargs -0 -I {} cp {} release-upload/
+          echo "--- Files in release-upload ---"
           ls -la release-upload/
 
       - name: Create GitHub Release
@@ -128,7 +132,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          tag_name: ${{ github.ref_name }}
           draft: false
           generate_release_notes: true
-          files: release-upload/*
+          files: |
+            release-upload/*.exe
+            release-upload/*.msi
+            release-upload/*.apk
+            release-upload/*.aab
+            release-upload/*.dmg
+            release-upload/*.ipa
           fail_on_unmatched_files: false
